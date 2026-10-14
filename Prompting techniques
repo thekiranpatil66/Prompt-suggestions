@@ -1,0 +1,381 @@
+================================================================================
+MASTER PROMPT: REPLICATE ENTERPRISE NL-SQL ASSISTANT (VERSION 2.1)
+OPTIMIZED FOR: GITHUB COPILOT (VS CODE / JETBRAINS / COPILOT WORKSPACE)
+================================================================================
+
+HOW TO USE THIS PROMPT WITH GITHUB COPILOT:
+1. Open your target IDE (VS Code or JetBrains) with an empty project folder.
+2. Ensure GitHub Copilot Chat is active. Select "Claude 3.5 Sonnet" or "GPT-4o" 
+   in the Copilot Chat model picker for superior full-project code generation.
+3. You can either:
+   - OPTION 1: Paste the entire Master Prompt below into Copilot Workspace or 
+     Copilot Chat to generate the whole scaffold.
+   - OPTION 2: Use the "Phased Execution Prompts" provided at the end of this 
+     file to generate each layer step-by-step without hitting token limits.
+
+--------------------------------------------------------------------------------
+START OF MASTER PROMPT (COPY EVERYTHING BELOW)
+--------------------------------------------------------------------------------
+
+You are a Principal Full-Stack & Systems Security Architect. Your objective is to build an exact, production-ready replica of the "Enterprise NL-SQL Assistant (Version 2.1)" microservice in Python using FastAPI, SQLGlot, SQLAlchemy 2.0 Async, Psycopg 3, and a modern zero-dependency vanilla JS frontend.
+
+The system must run smoothly across Python 3.10, 3.11, 3.12, and 3.14 on Windows, Linux, and macOS.
+
+================================================================================
+1. ARCHITECTURAL REQUIREMENTS & CAPABILITIES
+================================================================================
+
+A. THREE-LAYER READ-ONLY SECURITY MODEL:
+   - Layer 1 (Compiler-Level AST Guardrail via SQLGlot):
+     * The generated SQL string MUST be parsed into an Abstract Syntax Tree using `sqlglot.parse_one(sql, read="postgres")`.
+     * Whitelist: Only `exp.Select` and CTE `exp.CTE` / `exp.With` root nodes are permitted.
+     * Hard Rejections: Immediately raise `SecurityViolationError` if the tree contains `Insert`, `Update`, `Delete`, `Drop`, `Alter`, `Truncate`, `Grant`, `Revoke`, or statement separators (`;`).
+     * Dynamic Table Allowlist: Traverse all `exp.Table` identifiers in the AST and verify they exist within the dynamic table allowlist discovered from the database.
+     * Function Blacklist: Block functions like `pg_sleep`, `pg_terminate_backend`, `dblink`, etc.
+     * Zero-LLM Column Mutation: Provide an AST helper that surgically adds/projects columns into the `SELECT` expression without invoking the LLM.
+   - Layer 2 (PostgreSQL Driver Session Enforcement):
+     * Database engine created via `create_async_engine` with `postgresql+psycopg://`.
+     * Every session executes within explicit read-only transactions (`default_transaction_read_only = on` and `BEGIN TRANSACTION READ ONLY`).
+     * Per-query execution timeout enforced (`QUERY_TIMEOUT_SECONDS = 10`).
+   - Layer 3 (Physical Data Store Isolation):
+     * The business database is 100% read-only.
+     * Telemetry, message history, and user feedback are stored in a physically separate store (Local SQLite `observability.db` + Cloud Supabase PostgreSQL).
+
+B. DYNAMIC SCHEMA REFLECTION & SEMANTIC SYNONYM INTELLIGENCE:
+   - Schema Auto-Discovery: Support `DB_SCHEMA=*` (auto-detects all active user schemas from `information_schema.schemata`) or a specific schema name.
+   - Value-Aware Sampling: At startup, scan `information_schema.columns` and `pg_constraint`. For categorical text columns with low cardinality (distinct values <= 20), extract distinct allowed values.
+   - Semantic Synonym Mapping: Maintain a synonym mapping dictionary that automatically resolves colloquial user terms to actual database enum representations (e.g., maps "pending", "wip", or "ongoing" to `'In Progress'`).
+
+C. LLM ABSTRACTION & BOUNDED SELF-CORRECTION LOOP:
+   - Abstract Base Class: `BaseLLMService(ABC)`.
+   - `MockLLMService`: Comprehensive pattern-matching heuristic engine for offline demonstrations without API keys. Dynamic heuristic schema suggestions based on reflected tables.
+   - `OpenAILLMService`: Asynchronous httpx client supporting both Azure OpenAI and OpenAI Direct.
+   - Single-Line Crisp Table Lead: When tabular data is returned, output exactly ONE concise introductory sentence (< 15–20 words) preceding the table, maximizing vertical screen real estate.
+   - Bounded Self-Correction Loop: If SQL validation or database execution fails, feed the error diagnostic and schema back to the LLM (maximum 2 retries). If still failing, gracefully return an informative error message.
+   - Human-in-the-Loop Confirmation: If `REQUIRE_SQL_CONFIRMATION=true`, hold execution and return the SQL preview and explanation with `awaiting_confirmation=True`.
+
+D. HYBRID DUAL-STORE OBSERVABILITY & RESILIENCE:
+   - Local SQLite (`./observability.db`): Sub-millisecond synchronous feedback and telemetry writes.
+   - Cloud Supabase PostgreSQL: Background non-blocking replication task over TLS 1.3 (`?sslmode=require`).
+   - Circuit Breaker: Cloud connection failures or network drops are safely caught and suppressed; local user operations never fail.
+   - Hostname Auto-Detection: Auto-resolves `OBSERVABILITY_NODE_NAME` via `socket.gethostname()` if not set.
+   - URL Sanitizer: In `app/core/config.py`, automatically converts unencoded `@` in passwords to `%40` and strips documentation brackets (`[...]`).
+
+E. GRACEFUL STARTUP (OFFLINE / UNCONFIGURED POSTGRES):
+   - At startup in `app/main.py`, `check_connection()` executes `SELECT 1`.
+   - If PostgreSQL is unconfigured or unreachable, catch the exception, log `WARNING: Database connection failed — running in degraded mode`, skip schema reflection, and finish startup cleanly. Uvicorn MUST continue running so the web UI loads without crashing.
+
+F. FRONTEND INTERFACES:
+   - Chatbot UI (`/` -> `app/frontend/index.html` + `app.js` + `styles.css`):
+     * Google Gemini-inspired clean typography and modern card layout.
+     * Dynamic hero cards and top 10 question pills.
+     * Expandable left Schema Explorer tree with live search and 1-click token insertion.
+     * Markdown formatting with syntax-highlighted SQL blocks and clean HTML tables.
+     * Interactive feedback toolbar (thumbs up, thumbs down, 5 diagnostic tags modal).
+     * SQL Pre-Execution Adaptive Confirmation modal.
+   - APM Console (`/observability` -> `app/frontend/observability.html`):
+     * Dynatrace-style telemetry flow.
+     * Live dual-database diagnostic ping (`SELECT 1`).
+     * Latency breakdown (LLM time vs DB query time vs API overhead).
+     * Cross-node tester analytics filter by `OBSERVABILITY_NODE_NAME`.
+     * Chat Turn Deep-Dive Inspector Modal.
+
+================================================================================
+2. EXACT PROJECT FILE TREE
+================================================================================
+
+```
+├── .env.example
+├── requirements.txt
+└── app/
+    ├── __init__.py
+    ├── main.py
+    ├── api/
+    │   ├── __init__.py
+    │   ├── routes_chat.py
+    │   ├── routes_feedback.py
+    │   ├── routes_health.py
+    │   ├── routes_query.py
+    │   ├── routes_schema.py
+    │   └── routes_telemetry.py
+    ├── core/
+    │   ├── __init__.py
+    │   ├── config.py
+    │   ├── constants.py
+    │   ├── exceptions.py
+    │   ├── logging.py
+    │   └── telemetry.py
+    ├── db/
+    │   ├── __init__.py
+    │   ├── init_db.py
+    │   ├── models.py
+    │   └── session.py
+    ├── frontend/
+    │   ├── app.js
+    │   ├── index.html
+    │   ├── observability.html
+    │   └── styles.css
+    ├── models/
+    │   ├── __init__.py
+    │   ├── chat.py
+    │   ├── query.py
+    │   ├── result.py
+    │   └── schema.py
+    ├── prompts/
+    │   ├── __init__.py
+    │   ├── correction_prompt.py
+    │   ├── intent_prompt.py
+    │   └── sql_prompt.py
+    ├── repositories/
+    │   ├── __init__.py
+    │   ├── conversation_repository.py
+    │   └── schema_repository.py
+    └── services/
+        ├── __init__.py
+        ├── clarification_service.py
+        ├── conversation_service.py
+        ├── database_service.py
+        ├── llm_service.py
+        ├── orchestrator.py
+        ├── result_processor.py
+        ├── schema_service.py
+        ├── sql_generator.py
+        └── sql_validator.py
+```
+
+================================================================================
+3. DEPENDENCIES (requirements.txt)
+================================================================================
+```text
+fastapi>=0.115.0
+uvicorn[standard]>=0.30.0
+pydantic>=2.9.0
+pydantic-settings>=2.5.0
+sqlalchemy[asyncio]>=2.0.30
+psycopg[binary]>=3.1.0
+asyncpg>=0.29.0
+sqlglot>=25.0.0
+httpx>=0.27.0
+python-dotenv>=1.0.0
+aiofiles>=24.1.0
+aiosqlite>=0.20.0
+```
+
+================================================================================
+4. CONFIGURATION TEMPLATE (.env.example)
+================================================================================
+```ini
+APP_ENV=development
+DATABASE_URL=postgresql+psycopg://postgres:root@localhost:5432/nl_sql_poc?connect_timeout=2
+READ_ONLY_DATABASE_URL=postgresql+psycopg://postgres:root@localhost:5432/nl_sql_poc?connect_timeout=2
+
+# LLM Mode: "mock" for offline zero-key demo, or "real" for cloud
+LLM_MODE=mock
+LLM_PROVIDER=azure
+AZURE_OPENAI_ENDPOINT=https://your-resource.openai.azure.com/
+AZURE_OPENAI_API_KEY=your_key_here
+AZURE_OPENAI_DEPLOYMENT=gpt-4o
+AZURE_OPENAI_API_VERSION="2024-05-01-preview"
+
+# Standard OpenAI (Optional)
+OPENAI_API_KEY=
+OPENAI_MODEL=gpt-4o
+
+# Database Schema: "*" for dynamic discovery, or specific schema name (e.g. "public")
+DB_SCHEMA=public
+
+# Guardrails & Limits
+REQUIRE_SQL_CONFIRMATION=true
+MAX_SQL_RETRIES=2
+MAX_RESULT_ROWS=1000
+QUERY_TIMEOUT_SECONDS=10
+LOG_LEVEL=INFO
+LOG_SQL=false
+
+# Observability Dual-Storage: "hybrid", "local_only", or "cloud_only"
+OBSERVABILITY_MODE=local_only
+LOCAL_OBSERVABILITY_URL=sqlite+aiosqlite:///./observability.db
+CLOUD_OBSERVABILITY_URL=
+CLOUD_OBSERVABILITY_SCHEMA=public
+OBSERVABILITY_NODE_NAME=
+```
+
+================================================================================
+5. MODULE SPECIFICATIONS & IMPLEMENTATION DETAILS
+================================================================================
+
+1. app/core/config.py:
+   - Inherit from Pydantic `BaseSettings`. Load from `.env` with utf-8 encoding.
+   - Add `@field_validator` for string fields to strip quotes and whitespace.
+   - Add `@field_validator("OBSERVABILITY_NODE_NAME", mode="before")` resolving to `socket.gethostname()` if empty.
+   - Add `@field_validator("CLOUD_OBSERVABILITY_URL", "OBSERVABILITY_DATABASE_URL", mode="before")` sanitizing unencoded `@` in passwords to `%40` and stripping `[...]` brackets.
+
+2. app/core/telemetry.py:
+   - In-memory ultra-low-overhead circular buffer recording API metrics (`< 0.05ms` latency).
+   - Functions: `record_api(endpoint, method, status_code, duration_ms)`, `record_llm(call_type, model, prompt_tokens, completion_tokens, latency_s, prompt, output)`, `get_summary()`.
+
+3. app/db/session.py:
+   - On Windows (`sys.platform == "win32"`), set `asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())` for Psycopg async support.
+   - Maintain module-level AsyncEngine references: `_engine`, `_readonly_engine`, `_local_obs_engine`, `_cloud_obs_engine`.
+   - `init_engines(database_url, readonly_database_url)`:
+     * Support `NullPool` if testing. Otherwise, use `pool_size=5, max_overflow=10, pool_pre_ping=True`.
+     * Wrap search_path auto-detection in `try...except` so startup never fails if PostgreSQL is unreachable.
+     * Always initialize local SQLite engine (`LOCAL_OBSERVABILITY_URL`).
+     * Initialize cloud Supabase engine if `OBSERVABILITY_MODE` is `hybrid` or `cloud_only` and URL is provided.
+   - Provide `get_observability_sync_status()` returning live connection status for local and cloud engines.
+
+4. app/db/models.py:
+   - SQLAlchemy Declarative Base.
+   - Define metadata models for the observability store:
+     * `Conversation(id, title, created_at, updated_at)`
+     * `Message(id, conversation_id, role, content, sql, status, latency_ms, tokens, created_at)`
+     * `QueryFeedback(id, message_id, rating, tags, comment, node_name, created_at)`
+     * `AuditLog(id, event_type, details, node_name, created_at)`
+
+5. app/db/init_db.py:
+   - `create_tables()`: Runs `Base.metadata.create_all` on `_local_obs_engine` and `_cloud_obs_engine`.
+   - `check_connection() -> bool`: Executes `SELECT 1` on `_engine`. Catches all exceptions, logs a warning, and returns `False` without crashing.
+
+6. app/services/sql_validator.py:
+   - Import `sqlglot` and expressions `from sqlglot import exp`.
+   - `validate(sql: str, allowed_tables: set[str] | None = None) -> ValidationResult`:
+     1. Parse using `sqlglot.parse_one(sql, read="postgres")`.
+     2. Root node check: must be `exp.Select` or `exp.CTE` / `exp.With`. Reject `exp.Insert`, `exp.Update`, `exp.Delete`, `exp.Drop`, `exp.Alter`, `exp.Truncate`.
+     3. Reject multiple statements (semicolons).
+     4. Dynamic table validation: find all `exp.Table` and verify table names belong to `allowed_tables`.
+     5. Block blacklisted SQL functions (`pg_sleep`, `pg_terminate_backend`, `dblink`).
+   - `add_columns_to_query(sql: str, columns_to_add: list[str]) -> str`:
+     * Surgically appends requested columns to the AST root selection without calling the LLM.
+
+7. app/services/llm_service.py:
+   - **CRITICAL**: Include `from typing import Any` at the top of the file to guarantee compatibility across Python 3.10 and 3.11.
+   - Classes:
+     * `LLMResponse(intent, needs_clarification, clarification_question, sql, explanation, tables_used)`
+     * `AnswerResult(str)` carries `.answer` and `.suggestions` list.
+     * `BaseLLMService(ABC)`: abstract methods for SQL generation, answer formatting, self-correction, schema suggestions.
+     * `MockLLMService(BaseLLMService)`:
+       - Pattern matcher for enterprise queries: "employees", "salaries", "managers", "departments", "applications", "teams".
+       - Heuristic schema suggestions: `_generate_heuristic_suggestions(schema_context)` returning intelligent hero cards and top 10 queries based on discovered tables and columns.
+       - Telemetry recording: `_record_mock_telemetry(call_type, prompt, resp: Any)`.
+     * `OpenAILLMService(BaseLLMService)`:
+       - Asynchronous client using `httpx.AsyncClient`.
+       - Formats queries with single-line crisp table leads (< 15–20 words).
+       - Enforces JSON responses and parses schemas.
+
+8. app/services/schema_service.py:
+   - Extracts and caches database schema metadata.
+   - Data structures: `ColumnInfo`, `ForeignKeyInfo`, `TableSchema`, `SchemaContext`.
+   - `load_schema()`:
+     * Reflects columns from `information_schema.columns`.
+     * Scans categorical text columns (distinct values <= 20) and populates `col.sample_values`.
+     * Builds keyword index, synonym index, and sample value reverse index.
+   - `get_relevant_schema(user_request, conversation_context)`:
+     * Matches keywords, synonyms, and categorical sample values.
+     * Enriches context with related foreign-key tables up to 10 tables.
+
+9. app/services/orchestrator.py:
+   - Main pipeline coordinator:
+     1. Ambiguity detection (`clarification_service`).
+     2. Schema retrieval (`schema_service.get_relevant_schema()`).
+     3. SQL generation (`llm_service.generate_sql()`).
+     4. Pre-execution Confirmation: if `REQUIRE_SQL_CONFIRMATION` is True and query is not confirmed, return response with `awaiting_confirmation=True`.
+     5. Validation & Execution: validate with `SQLValidator`. Execute query via `database_service.execute_query()`.
+     6. Bounded Self-Correction: on SQL syntax error or DB exception, invoke `llm_service.correct_sql()` (max 2 retries).
+     7. Formatting: process results via `result_processor` and format answer with single-line table lead.
+     8. Record telemetry in local SQLite and dispatch non-blocking background task to Cloud Supabase.
+
+10. app/api/ & app/main.py:
+    - Routers:
+      * `routes_health.py`: GET `/health` returning status of DB, LLM, and version.
+      * `routes_chat.py`: POST `/api/v1/chat` and GET `/api/v1/conversations`.
+      * `routes_schema.py`: GET `/api/v1/schema`, GET `/api/v1/schema/suggestions`, POST `/api/v1/schema/refresh`.
+      * `routes_feedback.py`: POST `/api/v1/feedback` (thumbs up/down with diagnostic tags).
+      * `routes_query.py`: POST `/api/v1/query/execute` (direct SQL execution).
+      * `routes_telemetry.py`: GET `/api/v1/telemetry/stats`, GET `/api/v1/telemetry/db-status`, GET `/observability`.
+    - `main.py`:
+      * FastAPI instance with `lifespan`.
+      * CORS middleware, request ID middleware, request size limiter (413 if too large), zero-overhead APM telemetry middleware.
+      * Static file mounting: Mount `/static` to `app/frontend/`. Serve `/` with `index.html` and `/observability` with `observability.html`.
+
+11. app/frontend/ (index.html, observability.html, app.js, styles.css):
+    - `index.html` & `app.js`:
+      * Clean Gemini-inspired design with left collapsible Schema Explorer tree.
+      * Dynamic hero cards and top 10 query modal.
+      * Chat message rendering with markdown tables, code syntax highlighting, copy SQL button.
+      * Thumbs up/down feedback toolbar with 5 diagnostic tags modal.
+      * Adaptive card SQL Confirmation modal before query execution.
+    - `observability.html`:
+      * Real-time Dynatrace APM dashboard with live `SELECT 1` ping status for Local SQLite and Cloud PostgreSQL.
+      * Latency distribution, query volume chart, cross-tester node filters (`OBSERVABILITY_NODE_NAME`).
+      * Chat turn deep-dive modal displaying full prompts, SQL, latency, and returned row counts.
+
+Generate the code completely, cleanly, and adhering to strict Python typing standards with full production-grade error handling.
+--------------------------------------------------------------------------------
+END OF MASTER PROMPT
+--------------------------------------------------------------------------------
+
+================================================================================
+PHASED EXECUTION PROMPTS (FOR STEP-BY-STEP GENERATION IN COPILOT CHAT)
+================================================================================
+
+If GitHub Copilot reaches output length limits during a single generation, 
+feed these modular prompts in order:
+
+---
+PHASE 1: DEPENDENCIES & CORE INFRASTRUCTURE
+Prompt:
+"Generate the root requirements.txt, .env.example, and the entire app/core/ 
+package (app/core/__init__.py, config.py, constants.py, exceptions.py, 
+logging.py, telemetry.py) matching the Enterprise NL-SQL Assistant Version 2.1 
+architecture specified in the Master Prompt."
+
+---
+PHASE 2: DATABASE & REPOSITORIES
+Prompt:
+"Generate the entire app/db/ and app/repositories/ packages 
+(app/db/__init__.py, session.py, models.py, init_db.py, 
+app/repositories/__init__.py, conversation_repository.py, schema_repository.py) 
+implementing the dual-store SQLite + Cloud Supabase engine, connection check with 
+graceful degradation, and SQLAlchemy models."
+
+---
+PHASE 3: MODELS & PROMPTS
+Prompt:
+"Generate the entire app/models/ and app/prompts/ packages 
+(app/models/__init__.py, chat.py, query.py, result.py, schema.py, 
+app/prompts/__init__.py, intent_prompt.py, sql_prompt.py, correction_prompt.py) 
+matching the specifications in the Master Prompt."
+
+---
+PHASE 4: CORE SERVICES & SECURITY VALIDATION
+Prompt:
+"Generate app/services/sql_validator.py, schema_service.py, database_service.py, 
+and result_processor.py. Ensure sql_validator implements compiler-level SQLGlot 
+AST checks and zero-LLM column AST injection, and schema_service implements 
+value-aware sampling for categorical columns."
+
+---
+PHASE 5: LLM SERVICE & ORCHESTRATION PIPELINE
+Prompt:
+"Generate app/services/llm_service.py, clarification_service.py, 
+conversation_service.py, and orchestrator.py. Ensure llm_service.py includes 
+'from typing import Any' at the top, implements MockLLMService with dynamic 
+heuristic suggestions, and orchestrator implements pre-execution confirmation 
+and bounded 2-step self-correction."
+
+---
+PHASE 6: REST APIS & FASTAPI APPLICATION
+Prompt:
+"Generate all route modules in app/api/ (routes_chat.py, routes_schema.py, 
+routes_feedback.py, routes_query.py, routes_telemetry.py, routes_health.py) 
+and app/main.py with lifespan, APM telemetry middleware, CORS, and static file 
+mounting."
+
+---
+PHASE 7: ZERO-DEPENDENCY FRONTEND WEB UI & APM CONSOLE
+Prompt:
+"Generate the complete frontend in app/frontend/ (index.html, observability.html, 
+app.js, styles.css) featuring Google Gemini-inspired styling, 1-line crisp table 
+leads, thumbs up/down feedback toolbar with diagnostic tag modal, SQL confirmation 
+dialog, schema explorer tree, and Dynatrace-style APM monitoring dashboard."
+================================================================================
