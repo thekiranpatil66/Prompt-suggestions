@@ -1,0 +1,56 @@
+Refactor the frontend and orchestrator to match these 6 exact enterprise UI/UX specifications:
+
+1. INLINE ADAPTIVE CARD (NOT A POPUP MODAL):
+   - Do NOT use a centered modal popup or overlay backdrop for SQL confirmation.
+   - Render the adaptive card inline inside the chat message stream as `<div class="adaptive-card">`.
+   - The card must have:
+     * Header with icon, title "SQL Confirmation Required", and badge "Pending Review".
+     * Target Tables pills.
+     * SQL code container with an inline action toolbar: `✏️ Edit`, `↺ Reset`, `📋 Copy`, `💬 Quote`.
+
+2. IN-PLACE SQL EDITOR WITH DYNAMIC BUTTON:
+   - Clicking `✏️ Edit` must toggle the `<pre class="ac-sql-code">` block into an active `<textarea class="ac-sql-editor">`.
+   - When the user modifies the SQL in the textarea:
+     * Show the `↺ Reset` button.
+     * Dynamically update the confirmation button text from "Confirm & Run Query" to "Confirm & Run Edited Query".
+   - Clicking "Confirm & Run Edited Query" submits the edited SQL to `/api/v1/chat` with `{action: "execute", confirmed_sql: edited_sql}`, re-validating via SQLGlot AST before running.
+
+3. COMPACT INLINE FEEDBACK POPOVER (NOT A MODAL):
+   - On every completed assistant response, render a 3-button inline toolbar beside the Quote icon:
+     * `👍` (Submits 1-click instant positive sentiment)
+     * `👎` (Submits 1-click instant negative sentiment)
+     * `•••` (More options toggle)
+   - Clicking `•••` opens a floating popover (`.fb-popover`, max-width 280px) anchored directly above the buttons with an arrow pointer:
+     * 5 diagnostic tags: [Accurate Data] [Incorrect Filters] [Wrong Table/Columns] [Slow Execution] [Other]
+     * Optional 1-line comment textarea.
+     * Mini Cancel and Submit buttons.
+   - It must NOT darken the background or block the screen.
+
+4. SMART COMPLEXITY THRESHOLD FOR CONFIRMATION:
+   - In `app/services/orchestrator.py`, do NOT prompt for confirmation on every query.
+   - Auto-execute directly (bypass confirmation) if:
+     * Query is an aggregation or count: `COUNT()`, `SUM()`, `AVG()`, `MIN()`, `MAX()`, `EXISTS()`.
+     * User inquiry starts with "how many", "count", "number of", "is there", "are there".
+     * Query is simple: single SELECT (no CTE/WITH), LIMIT <= 10, no subqueries, at most 1 JOIN, no window functions (`OVER`).
+   - ONLY present the Adaptive Confirmation Card if the query is COMPLEX / HARD (multi-joins, CTEs, subqueries, large scans).
+
+5. 3-COLUMN INITIAL TABLE PROJECTION & AST COLUMN MUTATION:
+   - For broad exploratory queries ("show employees", "list projects"), project only the top 3 clean business columns:
+     1. Primary identifier (e.g. `id`)
+     2. Main descriptor / Name (e.g. `first_name`, `title`)
+     3. Key metric / status (e.g. `job_title`, `status`)
+     (Filter out `created_at`, `updated_at`, `sys_version`, `hash`, `password_hash`).
+   - Include proactive suggestion pills below the table:
+     * `+ Add {col1} & {col2}`
+     * `- Remove {col}`
+     * `Show all columns`
+     * `📥 Download all data as CSV`
+   - When the user clicks `Show all columns`, use SQLGlot AST (`sqlglot.parse_one`) to surgically expand the column selection and re-execute in < 15ms without invoking the LLM.
+
+6. DEDICATED APM CONSOLE (`/observability`):
+   - Provide the complete dark-mode Dynatrace-inspired dashboard in `app/frontend/observability.html`.
+   - Top Metrics Cards: Chat turns, Avg turn latency, API requests, Server error rate, LLM tokens, Self-correction rate, Feedback (▲ up / ▼ down).
+   - Real-Time Service Flow: Browser (Chat UI) -> FastAPI -> LLM -> SQLGlot AST -> PostgreSQL -> Observability.
+   - Dual-Database Diagnostics: Live latency & status cards with a "Ping databases" button executing active `SELECT 1` checks for Business PostgreSQL, Local SQLite, and Cloud Supabase.
+   - Filter dropdown by `OBSERVABILITY_NODE_NAME` (Tester node: All nodes).
+   - Chat Turn Deep-Dive Inspector Modal to view full prompt tokens, executed SQL, latency, and returned row counts for any individual turn.
