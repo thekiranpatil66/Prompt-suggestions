@@ -1,0 +1,15 @@
+STEP 1: Fix Database Schema Loading
+        👉 Paste 03_SCHEMA_LOADING_AND_RESOLUTION_PROMPT.txt
+        (Fixes the custom 'poc' schema, search_path, and categorical sampling)
+STEP 2: Fix Backend Pipeline & Orchestrator Logic
+        👉 Paste 01_SYSTEM_FLOW_AND_LOGIC_PROMPT.txt
+        (Fixes smart complexity threshold, 3-column start, and AST column customization)
+STEP 3: Apply Exact Color Palette, Animations & Raw SVG Icons
+        👉 Paste 05_EXACT_DESIGN_SYSTEM_ICONS_AND_ANIMATIONS.txt
+        (Injects exact CSS variables, keyframe animations, and 13 raw SVG icons)
+STEP 4: Fix Frontend UI Layout & APM Topology Flow
+        👉 Paste 02_FRONTEND_UI_AND_TOPOLOGY_PROMPT.txt
+        (Replaces popup modals with in-stream cards, inline feedback, and SVG Service Flow)
+STEP 5: Run Verification & Auto-Enhancement
+        👉 Paste 04_COPILOT_AGENT_TEST_AND_ENHANCEMENT_PROMPT.txt
+        (Runs the 10-scenario audit and auto-patches any remaining discrepancies)
