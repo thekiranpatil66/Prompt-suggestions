@@ -1,0 +1,495 @@
+================================================================================
+PROMPT 5: EXACT DESIGN SYSTEM, COLOR PALETTES, RAW ICONS & KEYFRAME ANIMATIONS
+PURPOSE: PREVENT COPILOT FROM USING GENERIC STYLES; ENFORCE PIXEL-PERFECT UI
+================================================================================
+
+FEED THIS PROMPT TO GITHUB COPILOT TO APPLY OUR EXACT COLOR PALETTES, 
+ICONS, AND ANIMATIONS TO index.html, styles.css, app.js, and observability.html:
+
+--------------------------------------------------------------------------------
+PROMPT START
+--------------------------------------------------------------------------------
+
+You are a Principal Frontend Design Systems Architect. Update the styling, CSS variables, raw SVG icons, and CSS keyframe animations across `app/frontend/index.html`, `styles.css`, and `observability.html` to strictly match our production visual standards.
+
+================================================================================
+1. EXACT COLOR PALETTES & CSS VARIABLES
+================================================================================
+
+A. Light Theme (Chat UI — `index.html` & `styles.css`):
+Add these CSS variables to `:root`:
+```css
+:root {
+  --bg: #ffffff;
+  --sidebar-bg: #f8fafd;
+  --card-bg: #f0f4f9;
+  --card-hover: #e5ebf3;
+  --text-main: #1f1f1f;
+  --text-muted: #5f6368;
+  --text-sub: #c4c7c5;
+  --border: #edf2f7;
+  --border-light: #dadce0;
+  --accent: #1a73e8;
+  --accent-hover: #1557b0;
+  --purple-brand: #7c3aed;
+  --green-success: #137333;
+  --green-bg: #e6f4ea;
+  --green-border: #ceead6;
+  --red-danger: #c5221f;
+  --red-bg: #fce8e6;
+  --red-border: #fad2cf;
+}
+```
+
+Brand Gradient:
+- Header brand badge gradient: `linear-gradient(135deg, #1a73e8 0%, #7c3aed 50%, #ea4335 100%)`
+- User chat message bubble: `background: #f0f4f9; color: #1f1f1f; border-radius: 18px 18px 4px 18px;`
+- Assistant chat message bubble: `background: transparent; color: #1f1f1f;`
+
+B. Dark Theme (APM Console — `observability.html`):
+- Background: `#0b0f19` (slate-950)
+- Card Containers: `#111827` (slate-900) with border `1px solid #1e293b`
+- Surface Hover: `#1e293b` (slate-800)
+- Main Headings: `#f8fafc` (slate-50)
+- Subtitles & Labels: `#94a3b8` (slate-400)
+- Service Flow Connectors: `#3b82f6` (blue), `#8b5cf6` (purple), `#10b981` (emerald), `#f59e0b` (amber)
+- Connected Status Dot: `#10b981` (emerald-500)
+- Offline / Standalone Dot: `#64748b` (slate-500)
+
+================================================================================
+2. EXACT CSS KEYFRAME ANIMATIONS
+================================================================================
+
+Include these exact `@keyframes` definitions in your CSS:
+
+```css
+/* 1. Animated Topology Dashed Line Flow (Observability SVG) */
+@keyframes flow-smooth {
+  0% { stroke-dashoffset: 24; }
+  100% { stroke-dashoffset: 0; }
+}
+
+.flow-line {
+  stroke-dasharray: 6 4;
+  animation: flow-smooth 1.3s linear infinite;
+}
+
+/* 2. Live Heartbeat Pulse (Status Indicator Dots) */
+@keyframes pulse-subtle {
+  0%, 100% { transform: scale(1); opacity: 1; }
+  50% { transform: scale(1.18); opacity: 0.55; }
+}
+
+.pulse-dot {
+  animation: pulse-subtle 2s infinite ease-in-out;
+}
+
+/* 3. Floating Tooltip Popover Smooth Slide & Fade (Feedback Popover) */
+@keyframes popoverFadeIn {
+  from { opacity: 0; transform: translate(-50%, 6px); }
+  to { opacity: 1; transform: translate(-50%, 0); }
+}
+
+.fb-popover.show {
+  display: block;
+  animation: popoverFadeIn 0.2s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+/* 4. Modal & In-stream Card Entrance */
+@keyframes cardFadeIn {
+  from { opacity: 0; transform: translateY(6px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.adaptive-card {
+  animation: cardFadeIn 0.25s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+/* 5. Smooth Spinner for Loading / Refresh Buttons */
+@keyframes spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+.spinning {
+  animation: spin 0.8s linear infinite;
+}
+```
+
+================================================================================
+3. RAW PRODUCTION SVG ICONS
+================================================================================
+
+Embed these exact raw SVG definitions inline in the HTML / JS templates:
+
+1. Brand Logo (Gemini Sparkle + DB Arc):
+```html
+<svg viewBox="0 0 32 32" width="28" height="28">
+  <defs>
+    <linearGradient id="brandGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#1a73e8"/>
+      <stop offset="50%" stop-color="#7c3aed"/>
+      <stop offset="100%" stop-color="#ea4335"/>
+    </linearGradient>
+  </defs>
+  <rect width="32" height="32" rx="8" fill="#1f1f1f"/>
+  <path d="M16 5l2 4.5L22.5 11l-4.5 2-2 4.5-2-4.5L9.5 11l4.5-2z" fill="url(#brandGrad)"/>
+  <ellipse cx="16" cy="22" rx="6.5" ry="2.5" fill="none" stroke="#4285f4" stroke-width="1.5"/>
+  <path d="M9.5 22v3.5c0 1.4 2.9 2.5 6.5 2.5s6.5-1.1 6.5-2.5V22" fill="none" stroke="#7c3aed" stroke-width="1.5"/>
+</svg>
+```
+
+2. Send Prompt Arrow Button:
+```html
+<svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor">
+  <path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z"/>
+</svg>
+```
+
+3. Copy SQL Icon:
+```html
+<svg viewBox="0 0 24 24" width="13" height="13" fill="currentColor">
+  <path d="M16 1H4c-1.1 0-2 .9-2 2v14h2V3h12V1zm3 4H8c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h11c1.1 0 2-.9 2-2V7c0-1.1-.9-2-2-2zm0 16H8V7h11v14z"/>
+</svg>
+```
+
+4. ↩️ Quote Assistant Icon:
+```html
+<svg viewBox="0 0 24 24" width="13" height="13" fill="currentColor">
+  <path d="M6 17h3l2-4V7H5v6h3zm8 0h3l2-4V7h-6v6h3z"/>
+</svg>
+```
+
+5. Thumbs Up (Good response):
+```html
+<svg viewBox="0 0 24 24" width="13" height="13" fill="currentColor">
+  <path d="M1 21h4V9H1v12zm22-11c0-1.1-.9-2-2-2h-6.31l.95-4.57.03-.32c0-.41-.17-.79-.44-1.06L14.17 1 7.59 7.59C7.22 7.95 7 8.45 7 9v10c0 1.1.9 2 2 2h9c.83 0 1.54-.5 1.84-1.22l3.02-7.05c.09-.23.14-.47.14-.73v-2z"/>
+</svg>
+```
+
+6. Thumbs Down (Bad response):
+```html
+<svg viewBox="0 0 24 24" width="13" height="13" fill="currentColor">
+  <path d="M15 3H6c-.83 0-1.54.5-1.84 1.22l-3.02 7.05c-.09.23-.14.47-.14.73v2c0 1.1.9 2 2 2h6.31l-.95 4.57-.03.32c0 .41.17.79.44 1.06L9.83 23l6.59-6.59c.37-.36.58-.86.58-1.41V5c0-1.1-.9-2-2-2zm4 0v12h4V3h-4z"/>
+</svg>
+```
+
+7. More Options (Three dots `•••`):
+```html
+<svg viewBox="0 0 24 24" width="13" height="13" fill="currentColor">
+  <path d="M6 10c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2zm12 0c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2zm-6 0c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2z"/>
+</svg>
+```
+
+8. Show & Edit SQL Code Brackets:
+```html
+<svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor">
+  <path d="M9.4 16.6L4.8 12l4.6-4.6L8 6l-6 6 6 6 1.4-1.4zm5.2 0l4.6-4.6-4.6-4.6L16 6l6 6-6 6-1.4-1.4z"/>
+</svg>
+```
+
+9. Run Query Play Triangle:
+```html
+<svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor">
+  <path d="M8 5v14l11-7z"/>
+</svg>
+```
+
+10. Cancel X Icon:
+```html
+<svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor">
+  <path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/>
+</svg>
+```
+
+11. 1-Click CSV Download Tray:
+```html
+<svg viewBox="0 0 24 24" width="13" height="13" fill="currentColor">
+  <path d="M19 9h-4V3H9v6H5l7 7 7-7zM5 18v2h14v-2H5z"/>
+</svg>
+```
+
+12. Follow-Up Suggestion Search Glass:
+```html
+<svg viewBox="0 0 24 24" width="13" height="13" fill="currentColor">
+  <path d="M15.5 14h-.79l-.28-.27A6.471 6.471 0 0 0 16 9.5 6.5 6.5 0 1 0 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19l-4.99-5zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 14z"/>
+</svg>
+```
+
+13. Live Database Ping Lightning Icon:
+```html
+<svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2.2">
+  <path stroke-linecap="round" stroke-linejoin="round" d="M13 10V3L4 14h7v7l9-11h-7z"/>
+</svg>
+```
+
+================================================================================
+4. EXACT COMPONENT STYLES & INTERACTION STATES
+================================================================================
+
+A. Feedback Toolbar & Popover Tooltip (`styles.css`):
+```css
+.feedback-action-bar {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  margin-left: 6px;
+  position: relative;
+}
+
+.fb-icon-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 25px;
+  height: 25px;
+  border-radius: 50%;
+  border: 1px solid transparent;
+  background: transparent;
+  color: #5f6368;
+  cursor: pointer;
+  transition: all 0.18s ease;
+  padding: 0;
+}
+
+.fb-icon-btn:hover {
+  background: #e8f0fe;
+  color: #1a73e8;
+}
+
+.fb-icon-btn.active-up {
+  background: #e6f4ea;
+  color: #137333;
+  border-color: #ceead6;
+}
+
+.fb-icon-btn.active-down {
+  background: #fce8e6;
+  color: #c5221f;
+  border-color: #fad2cf;
+}
+
+.fb-dropdown-wrap {
+  position: relative;
+  display: inline-flex;
+}
+
+.fb-popover {
+  display: none;
+  position: absolute;
+  bottom: calc(100% + 8px);
+  left: 50%;
+  transform: translateX(-50%);
+  width: 280px;
+  background: #ffffff;
+  border: 1px solid #dadce0;
+  border-radius: 12px;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.14);
+  padding: 12px;
+  z-index: 999;
+}
+
+.fb-popover::after {
+  content: '';
+  position: absolute;
+  top: 100%;
+  left: 50%;
+  transform: translateX(-50%);
+  border-width: 6px;
+  border-style: solid;
+  border-color: #ffffff transparent transparent transparent;
+}
+
+.fb-popover-title {
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: #202124;
+  margin-bottom: 8px;
+}
+
+.fb-reason-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-bottom: 8px;
+}
+
+.fb-tag {
+  font-size: 0.74rem;
+  padding: 4px 9px;
+  border-radius: 14px;
+  background: #f1f3f4;
+  border: 1px solid #dadce0;
+  color: #3c4043;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.fb-tag:hover {
+  background: #e8eaed;
+}
+
+.fb-tag.selected {
+  background: #e8f0fe;
+  border-color: #1a73e8;
+  color: #1a73e8;
+  font-weight: 500;
+}
+```
+
+B. IN-STREAM Adaptive Card (`styles.css`):
+```css
+.adaptive-card {
+  margin-top: 10px;
+  padding: 14px 16px;
+  background: #ffffff;
+  border: 1px solid #dadce0;
+  border-radius: 14px;
+  box-shadow: 0 1px 4px rgba(0,0,0,0.06);
+  max-width: 680px;
+}
+
+.ac-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 8px;
+}
+
+.ac-title-wrap {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+}
+
+.ac-title {
+  font-weight: 600;
+  font-size: 0.92rem;
+  color: #1f1f1f;
+}
+
+.ac-badge {
+  font-size: 0.72rem;
+  padding: 2px 8px;
+  border-radius: 10px;
+  background: #fef7e0;
+  color: #b06000;
+  font-weight: 600;
+  border: 1px solid #f9ab00;
+}
+
+.ac-sql-box {
+  background: #f8fafd;
+  border: 1px solid #e3e8ef;
+  border-radius: 8px;
+  overflow: hidden;
+  margin-top: 8px;
+}
+
+.ac-sql-toolbar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 5px 10px;
+  background: #eef2f8;
+  border-bottom: 1px solid #e3e8ef;
+}
+
+.ac-sql-tag {
+  font-size: 0.72rem;
+  font-weight: 600;
+  color: #5f6368;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.ac-sql-actions {
+  display: flex;
+  gap: 6px;
+}
+
+.ac-sql-btn, .ac-copy-btn {
+  font-size: 0.74rem;
+  padding: 2px 7px;
+  border-radius: 4px;
+  border: 1px solid #dadce0;
+  background: #ffffff;
+  color: #3c4043;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+
+.ac-sql-btn:hover, .ac-copy-btn:hover {
+  background: #f1f3f4;
+}
+
+.ac-sql-code {
+  padding: 10px 12px;
+  font-family: 'Fira Code', 'Courier New', monospace;
+  font-size: 0.82rem;
+  color: #1a73e8;
+  white-space: pre-wrap;
+  word-break: break-all;
+  line-height: 1.45;
+  margin: 0;
+}
+
+.ac-sql-editor {
+  display: none;
+  width: 100%;
+  min-height: 85px;
+  padding: 10px 12px;
+  font-family: 'Fira Code', 'Courier New', monospace;
+  font-size: 0.82rem;
+  color: #1a73e8;
+  background: #ffffff;
+  border: none;
+  outline: 2px solid #1a73e8;
+  resize: vertical;
+  line-height: 1.45;
+  box-sizing: border-box;
+}
+
+.ac-actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 10px;
+  align-items: center;
+}
+
+.ac-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 7px 14px;
+  border-radius: 18px;
+  font-size: 0.82rem;
+  font-weight: 500;
+  cursor: pointer;
+  border: none;
+  transition: all 0.15s ease;
+}
+
+.ac-btn-confirm {
+  background: #1a73e8;
+  color: #ffffff;
+}
+
+.ac-btn-confirm:hover {
+  background: #1557b0;
+}
+
+.ac-btn-cancel {
+  background: #f1f3f4;
+  color: #3c4043;
+}
+
+.ac-btn-cancel:hover {
+  background: #e8eaed;
+}
+```
+
+Applying these exact CSS tokens, animations, and SVG icons will ensure the generated application looks and feels 100% identical to our reference application.
+--------------------------------------------------------------------------------
+PROMPT END
+--------------------------------------------------------------------------------

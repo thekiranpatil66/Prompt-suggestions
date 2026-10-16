@@ -1,0 +1,126 @@
+================================================================================
+PROMPT 3: DATABASE SCHEMA REFLECTION, MULTI-SCHEMA DISCOVERY & SEARCH_PATH
+PURPOSE: FIX SCHEMA LOADING DEFECTS & GUARANTEE TABLE DISCOVERY IN POSTGRESQL
+================================================================================
+
+FEED THIS PROMPT TO GITHUB COPILOT TO FIX SCHEMA LOADING & DISCOVERY:
+
+--------------------------------------------------------------------------------
+PROMPT START
+--------------------------------------------------------------------------------
+
+You are a Principal Database Engineer specializing in PostgreSQL internals and SQLAlchemy async reflection. Implement `app/services/schema_service.py` and `app/db/session.py` to fix schema extraction and ensure table discovery works seamlessly across custom PostgreSQL schemas:
+
+### 1. Root Cause of Previous Schema Loading Failures:
+- In many enterprise PostgreSQL databases (including the seed dump of this project), tables do NOT reside in the default `public` schema; they reside in custom schemas (such as the `poc` schema).
+- If your code queries `WHERE table_schema = 'public'`, zero tables are loaded.
+- Furthermore, if the PostgreSQL connection session does not include the custom schema in its `search_path`, queries like `SELECT * FROM employees` fail with:
+  `relation "employees" does not exist`.
+
+### 2. Multi-Schema Dynamic Discovery (`app/services/schema_service.py`):
+Implement `load_schema()` with these exact PostgreSQL catalog queries:
+
+1. Determine Active Schemas to Inspect:
+   Read `DB_SCHEMA` from configuration (`get_settings()`).
+   - If `DB_SCHEMA` is set to a specific schema (e.g., `poc` or `analytics`), inspect that schema plus `public`.
+   - If `DB_SCHEMA` is `"*"` or `"all"` (default):
+     Query PostgreSQL system catalogs to discover all active user schemas:
+     ```sql
+     SELECT schema_name 
+     FROM information_schema.schemata
+     WHERE schema_name NOT IN ('information_schema', 'pg_catalog', 'pg_toast')
+       AND schema_name NOT LIKE 'pg_temp%'
+     ORDER BY schema_name;
+     ```
+     Collect all discovered user schemas into an `active_schemas` list.
+
+2. Reflect All Columns:
+   Query `information_schema.columns` across all active schemas:
+   ```sql
+   SELECT table_schema, table_name, column_name, data_type, is_nullable, column_default
+   FROM information_schema.columns
+   WHERE table_schema = ANY(:schemas)
+   ORDER BY table_name, ordinal_position;
+   ```
+   Construct `ColumnInfo` objects containing `name`, `data_type`, `is_nullable`, `default_value`.
+
+3. Reflect Primary Keys & Foreign Key Relationships:
+   Query `pg_constraint` to identify primary keys and foreign keys:
+   ```sql
+   SELECT
+       ns.nspname AS schema_name,
+       c.relname AS table_name,
+       a.attname AS column_name
+   FROM pg_constraint con
+   JOIN pg_class c ON c.oid = con.conrelid
+   JOIN pg_namespace ns ON ns.oid = c.relnamespace
+   JOIN pg_attribute a ON a.attrelid = c.oid AND a.attnum = ANY(con.conkey)
+   WHERE con.contype = 'p' AND ns.nspname = ANY(:schemas);
+   ```
+   Query foreign keys to build the foreign key relationship graph (`_relationships`).
+
+4. Value-Aware Categorical Sampling:
+   For every text/varchar column in each table, check its distinct value count:
+   ```sql
+   SELECT COUNT(DISTINCT "{col_name}") FROM "{schema_name}"."{table_name}";
+   ```
+   If the distinct count is low (1 to 20 distinct values), fetch those distinct values:
+   ```sql
+   SELECT DISTINCT "{col_name}" FROM "{schema_name}"."{table_name}"
+   WHERE "{col_name}" IS NOT NULL ORDER BY "{col_name}" LIMIT 20;
+   ```
+   Store these in `col.sample_values`.
+
+5. Build In-Memory Indexes:
+   - `_keyword_index`: maps words to table names.
+   - `_synonym_index`: maps domain synonyms ("worker", "staff", "people" -> `employees`).
+   - `_sample_value_index`: maps sample values (e.g. `'In Progress'`, `'Active'`) to tables.
+
+### 3. Setting Driver `search_path` in `app/db/session.py`:
+In `init_engines()`, when creating the read-only SQLAlchemy async engine for PostgreSQL:
+- Check `target_schema`.
+- If `DB_SCHEMA` is `"*"` or custom schemas exist, dynamically query `information_schema.schemata` and configure `engine_kwargs`:
+  ```python
+  engine_kwargs["connect_args"] = {"options": f"-c search_path={','.join(schemas)}"}
+  ```
+- Wrap this discovery in a `try...except Exception:` block so that if PostgreSQL is temporarily offline during startup, it gracefully falls back without crashing the app.
+
+### 4. REST API Schema Endpoint Contracts (`app/api/routes_schema.py`):
+1. `GET /api/v1/schema`:
+   Returns:
+   ```json
+   {
+     "tables": [
+       {
+         "name": "employees",
+         "columns": [
+           {"name": "id", "data_type": "integer", "is_nullable": false, "is_primary_key": true, "sample_values": []},
+           {"name": "first_name", "data_type": "character varying", "is_nullable": false, "sample_values": []},
+           {"name": "status", "data_type": "character varying", "sample_values": ["active", "inactive", "on_leave"]}
+         ],
+         "primary_keys": ["id"],
+         "foreign_keys": [{"column": "department_id", "references_table": "departments", "references_column": "id"}],
+         "row_count_estimate": 45
+       }
+     ],
+     "table_count": 52,
+     "last_refreshed": "2026-10-16T12:00:00Z"
+   }
+   ```
+2. `GET /api/v1/schema/suggestions`:
+   Returns dynamically tailored hero cards and top 10 questions:
+   ```json
+   {
+     "hero_card_1": { "title": "Explore Employees", "desc": "List active records", "preview_sql": "SELECT ...", "prompt": "Show all active employees" },
+     "top_queries": [
+       { "title": "Employee Directory", "prompt": "Show active employees in Technology" },
+       { "title": "Manager List", "prompt": "List all managers and their teams" }
+     ],
+     "hero_card_4": { "sample_sql": "SELECT COUNT(*) FROM employees;" }
+   }
+   ```
+
+Following these specifications ensures that custom schemas, tables, and columns load 100% reliably in the Schema Explorer tree and in LLM prompts.
+--------------------------------------------------------------------------------
+PROMPT END
+--------------------------------------------------------------------------------

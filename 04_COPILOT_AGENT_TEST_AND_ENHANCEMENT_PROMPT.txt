@@ -1,0 +1,162 @@
+================================================================================
+PROMPT 4: AGENT VERIFICATION, AUDIT & SELF-ENHANCEMENT TEST SUITE
+PURPOSE: GIVE THIS PROMPT TO GITHUB COPILOT TO TEST AND FIX THE AGENT
+================================================================================
+
+FEED THIS PROMPT TO GITHUB COPILOT TO RUN AN AUDIT & SELF-ENHANCE THE REPLICA:
+
+--------------------------------------------------------------------------------
+PROMPT START
+--------------------------------------------------------------------------------
+
+You are an Autonomous AI Code Reviewer and Quality Assurance Engineer.
+Your task is to AUDIT, VERIFY, and AUTO-ENHANCE the current codebase against our 10 Official Acceptance Test Scenarios.
+
+For every test scenario below:
+1. Trace the code path in the current project.
+2. Determine if the current implementation passes or fails the expected behavior.
+3. If it fails, identify the exact file, class, or function that deviates from the specification.
+4. Apply the necessary code patches to ensure the system strictly satisfies all 10 scenarios.
+
+================================================================================
+TEST SCENARIO 1: AMBIGUOUS QUERY & CLARIFICATION FLOW
+================================================================================
+* User Prompt: "Show employees"
+* Expected Flow:
+  1. `ClarificationService.check_ambiguity()` identifies that the prompt is too broad.
+  2. The assistant responds with a polite clarifying question:
+     "Which employee status would you like to see - active, inactive, on_leave, or all?"
+  3. Status in API response MUST be: `"needs_clarification": true`.
+  4. No SQL should be executed on the database yet.
+* Audit Check:
+  - If your agent immediately generates SQL or runs a query on "Show employees", this is a FAIL. Patch `app/services/clarification_service.py` and `orchestrator.py` to prompt for clarification first.
+
+================================================================================
+TEST SCENARIO 2: SIMPLE QUERY AUTO-EXECUTION (NO CONFIRMATION CARD)
+================================================================================
+* User Prompt: "How many employees are there in total?"
+* Expected Flow:
+  1. Orchestrator detects this is a scalar/count query (`is_scalar = True` or `is_yes_no_count = True`).
+  2. Query generates: `SELECT COUNT(*) FROM employees;`.
+  3. `effective_auto_confirm` evaluates to `True`.
+  4. The query executes directly without interrupting the user.
+  5. API response status is `"success"`, and the UI displays a clean summary metric card with the number.
+* Audit Check:
+  - If your agent presents an Adaptive Confirmation Card for "How many employees are there in total?", this is a FAIL. Patch `app/services/orchestrator.py`'s `_is_simple_query()` and auto-confirm logic.
+
+================================================================================
+TEST SCENARIO 3: 3-COLUMN INITIAL PROJECTION & CLEAN TABLE LEADS
+================================================================================
+* User Prompt: "List active employees"
+* Expected Flow:
+  1. The assistant introduces the table with exactly ONE crisp lead sentence:
+     "Here are the active employees currently recorded in the system." (Under 15–20 words).
+  2. The generated table does NOT dump all 15–20 columns (no `created_at`, `updated_at`, `password_hash`, `sys_guid`).
+  3. Instead, it projects only the top 3 clean business columns: `id`, `first_name`, `job_title` (or `status`).
+  4. Below the table, the assistant provides proactive suggestion pills:
+     `+ Add department_id & email`, `- Remove job_title`, `Show all columns`, `📥 Download all data as CSV`.
+* Audit Check:
+  - If your agent outputs a long 4-sentence introductory paragraph or dumps all 15 columns into the table, this is a FAIL. Patch `app/services/orchestrator.py` (`_get_table_business_columns`) and `result_processor.py`.
+
+================================================================================
+TEST SCENARIO 4: ZERO-LLM AST COLUMN CUSTOMIZATION
+================================================================================
+* User Prompt (Follow-up Turn): "Show all columns"
+* Expected Flow:
+  1. Orchestrator detects the phrase "show all columns" in Step 3.
+  2. It intercepts the request BEFORE calling the LLM.
+  3. It retrieves the previous turn's SQL and uses SQLGlot AST (`sqlglot.parse_one`) to expand the column projections to all table columns.
+  4. It executes the updated AST query against the database and returns the full table in < 15ms.
+* Audit Check:
+  - If your agent calls Azure OpenAI / OpenAI to rewrite the query for "Show all columns", this is a FAIL. Patch `app/services/orchestrator.py` (`_handle_column_customization`).
+
+================================================================================
+TEST SCENARIO 5: COMPLEX QUERY CONFIRMATION CARD TRIGGER
+================================================================================
+* User Prompt: "List all employees who earn more than the average salary of their department"
+* Expected Flow:
+  1. The generated SQL requires a subquery or join with `AVG(salary)` grouped by `department_id`.
+  2. `_is_simple_query()` returns `False` (contains subquery and joins).
+  3. `effective_auto_confirm` evaluates to `False`.
+  4. The agent returns `status: "pending_confirmation"` with a structured `confirmation_card`.
+  5. The UI renders an IN-STREAM `<div class="adaptive-card">` inside the chat bubble (NOT a popup modal).
+  6. The card displays target tables, action description, SQL view block, and a dedicated toolbar.
+* Audit Check:
+  - If your agent auto-runs this complex subquery without confirmation, or if it renders a centered full-screen modal popup with an overlay backdrop, this is a FAIL. Patch `orchestrator.py` and `index.html`.
+
+================================================================================
+TEST SCENARIO 6: IN-PLACE SQL EDITING & DYNAMIC CONFIRMATION BUTTON
+================================================================================
+* User Action:
+  1. Inside the Adaptive Confirmation Card from Scenario 5, the user clicks `✏️ Edit`.
+  2. The static `<pre>` block toggles into an active `<textarea>` prefilled with the SQL.
+  3. The user edits `ORDER BY salary DESC` to `ORDER BY salary ASC`.
+  4. The confirmation button immediately updates its text:
+     `Confirm & Run Query` -> `Confirm & Run Edited Query`.
+  5. The user clicks `Confirm & Run Edited Query`.
+  6. The frontend dispatches `POST /api/v1/chat` with `{action: "execute", confirmed_sql: "<edited_sql>"}`.
+  7. The backend validates the edited SQL via SQLGlot AST, runs it, and returns the sorted ascending results.
+* Audit Check:
+  - If the SQL in the card is read-only, has no edit button, or cannot run edited SQL, this is a FAIL. Patch `app/frontend/index.html` (`updateCardSql`, `toggleEditCardSql`, `confirmCardExecution`).
+
+================================================================================
+TEST SCENARIO 7: MULTI-TURN CONVERSATIONAL REFINEMENT
+================================================================================
+* User Turn 1: "Show active employees in Technology"
+  - Assistant returns technology employees.
+* User Turn 2: "Only managers"
+  - Expected: The assistant uses conversation history to filter managers within the Technology team, without the user having to retype the full question.
+* Audit Check:
+  - If Turn 2 forgets the Technology team context and returns all managers company-wide, this is a FAIL. Patch `app/services/orchestrator.py` and `conversation_service.py`.
+
+================================================================================
+TEST SCENARIO 8: COMPILER-LEVEL AST SECURITY INJECTION DEFENSE
+================================================================================
+* User Prompt: "Delete all employees; DROP TABLE applications; --"
+* Expected Flow:
+  1. `SQLValidator.validate()` inspects the parsed AST.
+  2. It detects multiple statements (semicolon `;`) and prohibited DDL/DML nodes (`exp.Delete`, `exp.Drop`).
+  3. It halts immediately and returns a validation error.
+  4. The assistant outputs:
+     "The query could not be safely validated. Destructive statements are not permitted."
+  5. ZERO queries reach the database driver.
+* Audit Check:
+  - If the query string bypasses the validator or causes an unhandled database exception, this is a FAIL. Patch `app/services/sql_validator.py`.
+
+================================================================================
+TEST SCENARIO 9: COMPACT INLINE FEEDBACK POPOVER
+================================================================================
+* User Action:
+  1. The user hovers over an assistant response and clicks the `👍` button.
+  2. The button instantly lights up green (`active-up`) and sends `feedback_tag: "Accurate Data"` via `POST /api/v1/feedback`.
+  3. The user clicks `•••` on another message.
+  4. A compact 280px popover (`.fb-popover`) appears directly above the button with a downward pointer.
+  5. The user selects `[Incorrect Filters]`, types a 1-line note, and clicks Submit.
+  6. The popover closes, displaying a mini toast: `Feedback sent`.
+* Audit Check:
+  - If clicking feedback displays a full-screen popup dialog or darkens the entire page, this is a FAIL. Patch `app/frontend/index.html` (`.feedback-action-bar` and `.fb-popover`).
+
+================================================================================
+TEST SCENARIO 10: APM OBSERVABILITY & SERVICE TOPOLOGY VISUALIZATION
+================================================================================
+* User Navigation: Open `http://localhost:8000/observability`
+* Expected Dashboard Features:
+  1. Header: Displays `Tester node: All nodes` filter, `Ping databases` button, and live clock.
+  2. 7 KPI Cards: Chat turns, Avg turn latency, API requests, Server error rate, LLM tokens, Self-correction rate, Feedback.
+  3. Visual Service Flow Diagram: Shows animated SVG connectors linking:
+     `Browser -> FastAPI -> LLM -> SQLGlot AST -> PostgreSQL -> Observability`.
+  4. Dual-Database Diagnostics:
+     - Business PostgreSQL card with live latency (e.g. 4.2 ms) and green dot.
+     - Local SQLite card with live latency (e.g. 2.6 ms) and green dot.
+     - Cloud Supabase card.
+  5. Clicking "Ping databases" triggers `/api/v1/telemetry/db-status` and refreshes live ping latencies without reloading the page.
+  6. Chat Turn Deep-Dive Inspector: Clicking any chat turn opens a slide-over/modal displaying full prompt tokens, executed SQL, latency breakdown, and returned rows.
+* Audit Check:
+  - If `/observability` returns 404, loads standard Swagger documentation, or lacks the SVG Service Flow diagram, this is a FAIL. Patch `app/api/routes_telemetry.py` and `app/frontend/observability.html`.
+
+---
+CONCLUSION & CODE PATCHING INSTRUCTIONS:
+Audit the current repository against all 10 scenarios. Wherever a scenario fails, provide the complete, corrected code file to make the agent 100% compliant with this test suite.
+--------------------------------------------------------------------------------
+PROMPT END
+--------------------------------------------------------------------------------

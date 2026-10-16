@@ -1,0 +1,97 @@
+================================================================================
+PROMPT 1: STRICT SYSTEM EXECUTION FLOW & BACKEND ORCHESTRATION LOGIC
+PURPOSE: ENFORCE THE EXACT STEP-BY-STEP ORCHESTRATOR PIPELINE AND BUSINESS LOGIC
+================================================================================
+
+FEED THIS PROMPT TO GITHUB COPILOT TO ENFORCE THE EXACT BACKEND LOGIC:
+
+--------------------------------------------------------------------------------
+PROMPT START
+--------------------------------------------------------------------------------
+
+You are a Principal Backend & Systems Architect. Implement the exact execution pipeline and business logic for `app/services/orchestrator.py` following our strict 12-step architectural flow:
+
+### 1. The 12-Step Orchestration Pipeline:
+When a user sends a prompt via `POST /api/v1/chat`, execute these steps in strict sequence:
+
+1. Step 1: Session & History Retrieval
+   - Retrieve or create `conversation_id`.
+   - Fetch the last 10 conversational turns for multi-turn context.
+   - If the user sent "cancel", "abort", or "stop", immediately cancel any pending query and return execution status "cancelled".
+
+2. Step 2: Confirmation / Edited SQL Detection
+   - Check if payload contains `confirmed_sql` or if message indicates confirmation ("confirm", "run query", "execute").
+   - If confirmed, validate the confirmed SQL using SQLGlot AST, execute it directly against the read-only database, process results, and return.
+
+3. Step 3: Zero-LLM Column Customization Check
+   - Check if the message is a column request:
+     * "+ Add {col}" or "+ Add {col1} & {col2}"
+     * "- Remove {col}"
+     * "Show all columns"
+   - If matched, do NOT call the LLM! Surgically modify the previous query's AST using SQLGlot (`_handle_column_customization`), execute the updated query, and return results in < 15ms.
+
+4. Step 4: Ambiguity & Clarification Detection
+   - Use `ClarificationService` to inspect the user prompt for missing parameters or ambiguous targets.
+   - If truly ambiguous (e.g. "show employees" without specifying if they want active, inactive, or contractors), return a clarifying question with `needs_clarification=True` without generating SQL.
+
+5. Step 5: Dynamic Schema Context Assembly
+   - Use `SchemaService.get_relevant_schema(message, history)` to gather matching tables based on table names, column names, domain synonyms, and categorical sample values. Include related foreign-key tables (up to 10 tables maximum).
+
+6. Step 6: Initial SQL Generation
+   - Invoke `LLMService.generate_sql()` with user prompt, schema context, and conversation history.
+   - In `LLM_MODE=mock`, use pattern matching for enterprise entities.
+   - In `LLM_MODE=real`, call Azure OpenAI / OpenAI via httpx with JSON schema formatting.
+
+7. Step 7: Compiler-Level AST Validation (Layer 1 Security)
+   - Parse with `sqlglot.parse_one(sql, read="postgres")`.
+   - Whitelist: Only `exp.Select` and `exp.CTE` / `exp.With` root expressions.
+   - Hard block: Disallow `Insert`, `Update`, `Delete`, `Drop`, `Alter`, `Truncate`, `Grant`, `Revoke`, semicolons, and blacklisted functions (`pg_sleep`, `dblink`).
+   - Allowlist: All referenced `exp.Table` names must exist in the active schema allowlist.
+
+8. Step 8: Bounded Self-Correction Loop (Max 2 Attempts)
+   - If AST validation fails (e.g., unknown column, syntax error), do NOT crash!
+   - Feed the exact validator errors and schema context back to `LLMService.correct_sql()`.
+   - Allow up to 2 retries. If still invalid after 2 retries, stop and return an informative error message.
+
+9. Step 9: Query Complexity & Auto-Execution Threshold
+   - Compute whether the query is "Simple" or "Complex":
+     * Is Scalar/Count: Query contains `COUNT(`, `SUM(`, `AVG(`, `MIN(`, `MAX(`, or `EXISTS(`.
+     * Is Question Count: Prompt begins with "how many", "count", "number of", "is there", "are there".
+     * Is Simple Query (`_is_simple_query`):
+       - Exactly 1 `SELECT` (no CTEs or `WITH` clauses).
+       - `LIMIT <= 10`.
+       - No subqueries (only 1 Select node in AST).
+       - No set operations (`UNION`, `INTERSECT`, `EXCEPT`).
+       - No window functions (`OVER (...)`).
+       - At most 1 table `JOIN`.
+   - IF query is Simple, Scalar, or Count:
+     * Mark `effective_auto_confirm = True`.
+
+10. Step 10: Human-in-the-Loop Confirmation Card Decision
+    - IF `REQUIRE_SQL_CONFIRMATION` is True AND `effective_auto_confirm` is False (i.e. the query is HARD/COMPLEX):
+      * DO NOT execute the query!
+      * Return status `"pending_confirmation"` with a structured `confirmation_card` object containing `{title, intent, explanation, sql, tables}`.
+      * Wait for user confirmation or edit from the UI.
+    - ELSE:
+      * Proceed directly to Step 11.
+
+11. Step 11: Read-Only Database Execution
+    - Execute query via `DatabaseService.execute_validated_query()`.
+    - Enforce read-only transaction and 10s query timeout.
+
+12. Step 12: Result Processing & Proactive Suggestion Pills
+    - Table Lead: Format a single, crisp introductory sentence (< 15–20 words) preceding the table.
+    - Initial 3-Column Projection (`_get_table_business_columns`):
+      For broad table queries, only project the top 3 clean business columns (Identifier, Name/Title, Status/Key Metric). Filter out internal columns (`created_at`, `updated_at`, `hash`, `guid`).
+    - Proactive Column Pills:
+      Below the table, dynamically generate actionable pills:
+      * `+ Add {col1} & {col2}`
+      * `- Remove {col}`
+      * `Show all columns`
+      * `📥 Download all data as CSV`
+    - Telemetry Logging: Record turn telemetry synchronously in local SQLite and trigger non-blocking cloud replication.
+
+Ensure all method signatures, data classes, and logic flow match this 12-step contract exactly.
+--------------------------------------------------------------------------------
+PROMPT END
+--------------------------------------------------------------------------------

@@ -1,0 +1,106 @@
+================================================================================
+PROMPT 2: FRONTEND UI & SERVICE TOPOLOGY SPECIFICATION
+PURPOSE: ENFORCE THE EXACT GEMINI CHAT INTERFACE & DYNATRACE APM CONSOLE
+================================================================================
+
+FEED THIS PROMPT TO GITHUB COPILOT TO BUILD THE EXACT FRONTEND INTERFACES:
+
+--------------------------------------------------------------------------------
+PROMPT START
+--------------------------------------------------------------------------------
+
+You are a Senior Frontend UI/UX Engineer specializing in modern, zero-dependency, responsive web interfaces. Implement `app/frontend/index.html`, `app/frontend/app.js`, `app/frontend/styles.css`, and `app/frontend/observability.html` matching our exact design specifications:
+
+### 1. Main Chat Interface (`app/frontend/index.html`):
+The layout is inspired by Google Gemini, featuring a clean white-and-slate design, a left collapsible sidebar, and a central chat viewport.
+
+A. Left Collapsible Schema Explorer Sidebar:
+   - Width: 260px, collapsible with a top hamburger toggle button.
+   - Header with "+ New chat" button and tab switchers ("Schema" and "History").
+   - Search input ("Search tables and columns") with a 1-click clear "✕" button.
+   - Dynamic Tree View:
+     * Displays all discovered tables with total column count pills (e.g., `employees 11`, `departments 4`).
+     * Clicking a table expands its columns with data type tags (e.g. `varchar`, `integer`, `timestamp`).
+     * Clicking any column or table name triggers `insertSchemaToken()`, inserting the token into the chat input bar and displaying a toast: `Inserted "employees" into chat prompt`.
+   - Bottom links: "Refresh schema" and "⚡ APM Console" (navigates to `/observability`).
+
+B. IN-STREAM Adaptive Confirmation Card (DO NOT USE A MODAL POPUP):
+   - When the backend returns `status === "pending_confirmation"`, render `<div class="adaptive-card">` directly inside the assistant message bubble in the chat thread.
+   - NEVER display a full-screen popup modal or overlay backdrop for query confirmation!
+   - Card Components:
+     * Card Header: Blue info icon, title "SQL Confirmation Required", and badge "Pending Review".
+     * Body: "Action: {explanation}".
+     * Target Tables: Chips highlighting the tables accessed.
+     * SQL Container (`.ac-sql-box`):
+       - Toolbar: `SQL Query` tag on the left, action buttons on the right: `✏️ Edit`, `↺ Reset`, `📋 Copy`, `💬 Quote`.
+       - View Mode: `<pre class="ac-sql-code">` displaying formatted SQL.
+       - Edit Mode: `<textarea class="ac-sql-editor">` hidden by default, revealed when `✏️ Edit` is clicked.
+       - Real-Time Dynamic Button:
+         When the user types in the textarea, show the `↺ Reset` button and immediately change the action button text from:
+         `Confirm & Run Query` -> `Confirm & Run Edited Query`!
+       - Action Buttons:
+         * Primary: `Confirm & Run Query` (or `Confirm & Run Edited Query`).
+         * Secondary: `Cancel` (cancels query without running).
+         * Reset: `↺ Reset` (reverts back to original proposed SQL).
+
+C. Compact Inline Feedback Toolbar (DO NOT USE A MODAL DIALOG):
+   - Under every completed assistant response, place a compact inline toolbar beside the ↩️ Quote button:
+     * `👍` (Good response: turns green `active-up` and sends quick 1-click positive sentiment).
+     * `👎` (Bad response: turns red `active-down` and sends quick 1-click negative sentiment).
+     * `•••` (More options toggle).
+   - Clicking `•••` opens a lightweight floating popover (`.fb-popover`, width 280px, with a downward-pointing arrow) anchored directly above the button:
+     * Title: "Provide Feedback".
+     * 5 Diagnostic Chips: `Accurate Data`, `Incorrect Filters`, `Wrong Table/Columns`, `Slow Execution`, `Other`.
+     * Optional 1-line comment textarea.
+     * Mini Cancel and Submit buttons.
+   - It must NEVER darken the screen, freeze scroll, or display a centered modal box.
+
+D. Single-Line Crisp Table Lead & CSV Export:
+   - Tables must be preceded by exactly ONE short introductory sentence (< 15–20 words).
+   - Table Toolbar:
+     * Record count label: `Showing top 10 of 45 records` or `Showing 10 records`.
+     * Preview tag: `Preview` badge if more records exist.
+     * Download Button: `Download CSV ({count} rows)` exporting client-side CSV with 1-click.
+
+---
+
+### 2. Dedicated APM Observability Console (`app/frontend/observability.html`):
+The APM Console is served at route `/observability`. It is a dedicated, dark-themed Dynatrace-inspired APM console.
+
+A. Top Header & Tester Filter:
+   - Header: "APM Console NL-SQL Assistant · telemetry & observability".
+   - Tester Node Filter Dropdown: `<select id="nodeFilter">` allowing filtering metrics by `All nodes` or individual `OBSERVABILITY_NODE_NAME` values.
+   - "Ping databases" button: Triggers real-time ping check against `/api/v1/telemetry/db-status`.
+   - "Back to chat" button linking back to `/`.
+
+B. Key KPI Metrics Cards (7 Cards Grid):
+   - `Chat turns`: Total conversational turns (all nodes).
+   - `Avg turn latency`: Average latency in seconds, plus p95 indicator.
+   - `API requests`: Total API count and avg/p95 duration.
+   - `Server error rate`: Error percentage (5xx / 4xx counts).
+   - `LLM tokens`: Total token consumption and call count.
+   - `Self-correction rate`: Percentage of queries requiring auto-retry.
+   - `Feedback`: `▲ Positive` / `▼ Negative` sentiment count.
+
+C. Visual Service Flow Topology Diagram:
+   - Render a visual, horizontal pipeline diagram showing the end-to-end service flow:
+     `[ Browser (Chat UI) ] -> [ FastAPI (API overhead ms) ] -> [ LLM (SQL + answer ms) ] -> [ SQLGlot AST (Layer 1 guardrail) ] -> [ PostgreSQL (Layer 2 read-only ms) ] -> [ Observability (SQLite + Supabase) ]`
+   - Use connected SVG animated dashed flow lines (`flow-line`) and live latency badges for each step.
+
+D. Dual-Database Diagnostics:
+   - 3 side-by-side diagnostic cards:
+     1. `Business PostgreSQL (read-only)`: Status dot (green if connected, red if offline), latency in ms, and subtitle `SELECT 1 · Connected, Layer 2 + 3 isolation`.
+     2. `Local SQLite (observability.db)`: Status dot, latency in ms, subtitle `SELECT 1 · Connected, mode: local_only`.
+     3. `Cloud Supabase PostgreSQL`: Status dot, latency in ms, subtitle `TLS sslmode=require, async replication`.
+   - Clicking "Ping databases" flashes the status and refreshes live ping latencies.
+
+E. Chat Turn Deep-Dive Inspector Modal:
+   - A table listing recent chat turns with columns: Timestamp, Node, Status, Latency, Prompt, Executed SQL.
+   - Clicking any turn opens a slide-over/modal inspector displaying:
+     * Full Prompt text and Token count.
+     * Executed SQL in syntax-highlighted code block.
+     * Execution Latency breakdown (LLM time vs DB query time).
+     * Output data rows and User Feedback rating.
+--------------------------------------------------------------------------------
+PROMPT END
+--------------------------------------------------------------------------------
